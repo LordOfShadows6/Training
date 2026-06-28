@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interval Trainer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0b0c10;
+    --surface:  #111318;
+    --border:   #1e2130;
+    --muted:    #3a3f52;
+    --text:     #c8ccd8;
+    --dim:      #6b7080;
+    --amber:    #f0a030;
+    --amber-lo: rgba(240,160,48,0.08);
+    --amber-md: rgba(240,160,48,0.18);
+    --green:    #3dd68c;
+    --red:      #e05c5c;
+    --mono:     'JetBrains Mono', monospace;
+    --sans:     'DM Sans', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 32px 16px 48px;
+  }
+
+  /* ── Header ─────────────────────────────────────── */
+  header {
+    width: 100%;
+    max-width: 680px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 40px;
+  }
+  header h1 {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--amber);
+  }
+  header span {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Layout ──────────────────────────────────────── */
+  .shell {
+    width: 100%;
+    max-width: 680px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  /* ── Pulse Visualizer ───────────────────────────── */
+  .visualizer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 220px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .pulse-ring {
+    position: absolute;
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    border: 2px solid var(--amber);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .pulse-ring.r1 { animation: none; }
+  .pulse-ring.r2 { animation: none; }
+  .pulse-ring.r3 { animation: none; }
+
+  @keyframes ring-out {
+    0%   { transform: scale(1);   opacity: 0.9; }
+    100% { transform: scale(4.5); opacity: 0; }
+  }
+  @keyframes ring-out-2 {
+    0%   { transform: scale(1);   opacity: 0.55; }
+    100% { transform: scale(4.5); opacity: 0; }
+  }
+  @keyframes ring-out-3 {
+    0%   { transform: scale(1);   opacity: 0.25; }
+    100% { transform: scale(4.5); opacity: 0; }
+  }
+
+  .pulse-ring.r1.fire { animation: ring-out   0.9s ease-out forwards; }
+  .pulse-ring.r2.fire { animation: ring-out-2 0.9s ease-out 0.14s forwards; }
+  .pulse-ring.r3.fire { animation: ring-out-3 0.9s ease-out 0.28s forwards; }
+
+  .pulse-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 3px var(--amber-md);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+    z-index: 1;
+  }
+  .pulse-dot.fired {
+    transform: scale(1.7);
+    box-shadow: 0 0 0 6px var(--amber-lo);
+  }
+
+  /* pause overlay */
+  .pause-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(11,12,16,0.75);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .pause-overlay.visible { opacity: 1; }
+  .pause-overlay .pause-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .pause-overlay .pause-countdown {
+    font-family: var(--mono);
+    font-size: 36px;
+    font-weight: 300;
+    color: var(--green);
+  }
+
+  /* progress bar at bottom of visualizer */
+  .progress-bar-track {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--border);
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--amber);
+    width: 0%;
+    transition: width 0.5s linear;
+  }
+
+  /* time readout top-right */
+  .time-readout {
+    position: absolute;
+    top: 14px; right: 18px;
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 300;
+    letter-spacing: 0.04em;
+    color: var(--text);
+  }
+  .time-readout .total {
+    font-size: 12px;
+    color: var(--dim);
+    display: block;
+    text-align: right;
+    margin-top: 2px;
+  }
+
+  /* next beep / pause label */
+  .next-label {
+    position: absolute;
+    bottom: 16px; left: 18px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+  }
+
+  /* ── Status log ─────────────────────────────────── */
+  .log-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    height: 90px;
+    overflow-y: auto;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+  }
+  .log-box p {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    white-space: pre;
+  }
+  .log-box p.hi { color: var(--amber); }
+  .log-box p.pa { color: var(--green); }
+  .log-box::-webkit-scrollbar { width: 4px; }
+  .log-box::-webkit-scrollbar-track { background: transparent; }
+  .log-box::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
+
+  /* ── Config panels ──────────────────────────────── */
+  .config-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 480px) { .config-grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px 18px;
+  }
+  .panel-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 12px;
+  }
+
+  /* Radio chips */
+  .chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .chip-group input { display: none; }
+  .chip-group label {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 11px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--dim);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+    user-select: none;
+  }
+  .chip-group input:checked + label {
+    border-color: var(--amber);
+    color: var(--amber);
+    background: var(--amber-lo);
+  }
+  .chip-group label:hover { border-color: var(--muted); color: var(--text); }
+
+  /* Mode cards */
+  .mode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  @media (max-width: 480px) { .mode-grid { grid-template-columns: repeat(2,1fr); } }
+
+  .mode-card input { display: none; }
+  .mode-card label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .mode-card input:checked + label {
+    border-color: var(--amber);
+    background: var(--amber-lo);
+  }
+  .mode-card label:hover { border-color: var(--muted); }
+  .mode-card .mc-name {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .mode-card input:checked + label .mc-name { color: var(--amber); }
+  .mode-card .mc-detail {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+    line-height: 1.5;
+  }
+
+  /* Custom inputs */
+  .custom-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px 18px;
+    display: none;
+  }
+  .custom-panel.visible { display: block; }
+  .custom-fields {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 16px;
+  }
+  @media (max-width: 480px) { .custom-fields { grid-template-columns: 1fr; } }
+  .field label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 5px;
+  }
+  .field input[type=number] {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+    -moz-appearance: textfield;
+  }
+  .field input[type=number]::-webkit-inner-spin-button { display: none; }
+  .field input[type=number]:focus { border-color: var(--amber); }
+
+  /* ── Controls ───────────────────────────────────── */
+  .controls {
+    display: flex;
+    gap: 10px;
+  }
+  .btn {
+    flex: 1;
+    padding: 13px;
+    border: 1px solid;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .btn-start {
+    background: var(--amber);
+    border-color: var(--amber);
+    color: #0b0c10;
+  }
+  .btn-start:hover { background: #f5b048; border-color: #f5b048; }
+  .btn-start:disabled { background: var(--muted); border-color: var(--muted); color: var(--bg); cursor: not-allowed; }
+  .btn-stop {
+    background: transparent;
+    border-color: var(--red);
+    color: var(--red);
+    display: none;
+  }
+  .btn-stop:hover { background: rgba(224,92,92,0.1); }
+  .btn-reset {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--dim);
+  }
+  .btn-reset:hover { border-color: var(--muted); color: var(--text); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Interval Trainer</h1>
+  <span>// audio focus tool</span>
+</header>
+
+<div class="shell">
+
+  <!-- Visualizer -->
+  <div class="visualizer">
+    <div class="pulse-ring r1" id="ring1"></div>
+    <div class="pulse-ring r2" id="ring2"></div>
+    <div class="pulse-ring r3" id="ring3"></div>
+    <div class="pulse-dot"  id="dot"></div>
+
+    <div class="pause-overlay" id="pauseOverlay">
+      <span class="pause-label">pause</span>
+      <span class="pause-countdown" id="pauseCountdown">—</span>
+    </div>
+
+    <div class="time-readout">
+      <span id="elapsed">0:00</span>
+      <span class="total" id="totalLabel">/ 0:00</span>
+    </div>
+
+    <div class="next-label" id="nextLabel"></div>
+
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="log-box" id="logBox">
+    <p class="dim">— waiting to start —</p>
+  </div>
+
+  <!-- Config row 1: Level + Beep length -->
+  <div class="config-grid">
+    <div class="panel">
+      <div class="panel-label">Intensity level</div>
+      <div class="chip-group" id="levelGroup">
+        <input type="radio" name="level" id="l1" value="1" checked>
+        <label for="l1">Quarter</label>
+        <input type="radio" name="level" id="l2" value="2">
+        <label for="l2">Half</label>
+        <input type="radio" name="level" id="l3" value="3">
+        <label for="l3">¾</label>
+        <input type="radio" name="level" id="l4" value="4">
+        <label for="l4">Full</label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">Beep length</div>
+      <div class="chip-group" id="beepGroup">
+        <input type="radio" name="beep" id="b1" value="0.5" checked>
+        <label for="b1">0.5 s</label>
+        <input type="radio" name="beep" id="b2" value="1">
+        <label for="b2">1 s</label>
+        <input type="radio" name="beep" id="b3" value="2">
+        <label for="b3">2 s</label>
+        <input type="radio" name="beep" id="b4" value="3">
+        <label for="b4">3 s</label>
+        <input type="radio" name="beep" id="b5" value="5">
+        <label for="b5">5 s</label>
+        <input type="radio" name="beep" id="b6" value="10">
+        <label for="b6">10 s</label>
+        <input type="radio" name="beep" id="b7" value="15">
+        <label for="b7">15 s</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mode selector -->
+  <div class="panel">
+    <div class="panel-label">Mode</div>
+    <div class="mode-grid">
+      <div class="mode-card">
+        <input type="radio" name="mode" id="m1" value="1" checked>
+        <label for="m1">
+          <span class="mc-name">Quick</span>
+          <span class="mc-detail">5 min · 1s interval<br>Pause 10s / 30s</span>
+        </label>
+      </div>
+      <div class="mode-card">
+        <input type="radio" name="mode" id="m2" value="2">
+        <label for="m2">
+          <span class="mc-name">Steady</span>
+          <span class="mc-detail">10 min · 2s interval<br>Pause 15s / 60s</span>
+        </label>
+      </div>
+      <div class="mode-card">
+        <input type="radio" name="mode" id="m3" value="3">
+        <label for="m3">
+          <span class="mc-name">Deep</span>
+          <span class="mc-detail">15 min · 3s interval<br>Pause 20s / 90s</span>
+        </label>
+      </div>
+      <div class="mode-card">
+        <input type="radio" name="mode" id="m4" value="4">
+        <label for="m4">
+          <span class="mc-name">Extended</span>
+          <span class="mc-detail">20 min · 4s interval<br>Pause 30s / 120s</span>
+        </label>
+      </div>
+      <div class="mode-card">
+        <input type="radio" name="mode" id="m5" value="5">
+        <label for="m5">
+          <span class="mc-name">Endurance</span>
+          <span class="mc-detail">30 min · 5s interval<br>Pause 60s / 180s</span>
+        </label>
+      </div>
+      <div class="mode-card">
+        <input type="radio" name="mode" id="m6" value="6">
+        <label for="m6">
+          <span class="mc-name">Custom</span>
+          <span class="mc-detail">Set your own<br>parameters</span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom panel -->
+  <div class="custom-panel" id="customPanel">
+    <div class="panel-label" style="margin-bottom:12px">Custom parameters</div>
+    <div class="custom-fields">
+      <div class="field">
+        <label>Total duration (s)</label>
+        <input type="number" id="cTotal" value="300" min="1">
+      </div>
+      <div class="field">
+        <label>Beep interval (s)</label>
+        <input type="number" id="cInterval" value="2" min="0.1" step="0.1">
+      </div>
+      <div class="field">
+        <label>Pause every (s)</label>
+        <input type="number" id="cPauseInterval" value="60" min="1">
+      </div>
+      <div class="field">
+        <label>Pause duration (s)</label>
+        <input type="number" id="cPauseDur" value="15" min="1">
+      </div>
+      <div class="field">
+        <label>Beep length (s)</label>
+        <input type="number" id="cBeepLen" value="1" min="0.1" step="0.1">
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="btn btn-start" id="btnStart">Start</button>
+    <button class="btn btn-stop"  id="btnStop">Stop</button>
+    <button class="btn btn-reset" id="btnReset">Reset</button>
+  </div>
+
+</div>
+
+<script>
+/* ─── Audio via Web Audio API ─────────────────────────────────── */
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx = null;
+
+function ensureAudio() {
+  if (!actx) actx = new AudioCtx();
+  if (actx.state === 'suspended') actx.resume();
+}
+
+function beep(frequency, durationSec, volume = 0.4) {
+  ensureAudio();
+  const osc  = actx.createOscillator();
+  const gain = actx.createGain();
+  osc.connect(gain);
+  gain.connect(actx.destination);
+  osc.type      = 'sine';
+  osc.frequency.value = frequency;
+  const now = actx.currentTime;
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.01);
+  gain.gain.setValueAtTime(volume, now + durationSec - 0.05);
+  gain.gain.linearRampToValueAtTime(0, now + durationSec);
+  osc.start(now);
+  osc.stop(now + durationSec);
+}
+
+function pauseChime() {
+  ensureAudio();
+  [1000, 1200].forEach((f, i) => {
+    const osc = actx.createOscillator();
+    const g   = actx.createGain();
+    osc.connect(g); g.connect(actx.destination);
+    osc.type = 'sine'; osc.frequency.value = f;
+    const t = actx.currentTime + i * 0.18;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.35, t + 0.01);
+    g.gain.linearRampToValueAtTime(0, t + 0.35);
+    osc.start(t); osc.stop(t + 0.4);
+  });
+}
+
+/* ─── Level → frequency ───────────────────────────────────────── */
+const LEVEL_FREQ = { "1": 310, "2": 410, "3": 560, "4": 720 };
+
+/* ─── Mode configs ────────────────────────────────────────────── */
+const MODES = {
+  "1": { total: 300,  interval: 1, pauseEvery: 30,  pauseDur: 10 },
+  "2": { total: 600,  interval: 2, pauseEvery: 60,  pauseDur: 15 },
+  "3": { total: 900,  interval: 3, pauseEvery: 90,  pauseDur: 20 },
+  "4": { total: 1200, interval: 4, pauseEvery: 120, pauseDur: 30 },
+  "5": { total: 1800, interval: 5, pauseEvery: 180, pauseDur: 60 },
+  "6": null,
+};
+
+/* ─── State ───────────────────────────────────────────────────── */
+let timer       = null;   // setInterval handle
+let running     = false;
+let elapsed     = 0;
+let nextPause   = 0;
+let cfg         = {};
+
+/* ─── DOM refs ────────────────────────────────────────────────── */
+const dot           = document.getElementById('dot');
+const ring1         = document.getElementById('ring1');
+const ring2         = document.getElementById('ring2');
+const ring3         = document.getElementById('ring3');
+const pauseOverlay  = document.getElementById('pauseOverlay');
+const pauseCountdown= document.getElementById('pauseCountdown');
+const progressFill  = document.getElementById('progressFill');
+const elapsedEl     = document.getElementById('elapsed');
+const totalLabelEl  = document.getElementById('totalLabel');
+const nextLabelEl   = document.getElementById('nextLabel');
+const logBox        = document.getElementById('logBox');
+const btnStart      = document.getElementById('btnStart');
+const btnStop       = document.getElementById('btnStop');
+const btnReset      = document.getElementById('btnReset');
+const customPanel   = document.getElementById('customPanel');
+
+/* ─── Mode radio → show/hide custom ──────────────────────────── */
+document.querySelectorAll('input[name="mode"]').forEach(r => {
+  r.addEventListener('change', () => {
+    customPanel.classList.toggle('visible', r.value === '6');
+  });
+});
+
+/* ─── Helpers ─────────────────────────────────────────────────── */
+function fmt(sec) {
+  sec = Math.floor(sec);
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function log(msg, cls = '') {
+  const p = document.createElement('p');
+  if (cls) p.className = cls;
+  p.textContent = msg;
+  logBox.prepend(p);
+  // keep log tidy
+  while (logBox.children.length > 60) logBox.removeChild(logBox.lastChild);
+}
+
+function firePulse() {
+  dot.classList.remove('fired');
+  void dot.offsetWidth;
+  dot.classList.add('fired');
+  setTimeout(() => dot.classList.remove('fired'), 300);
+
+  [ring1, ring2, ring3].forEach(r => {
+    r.classList.remove('fire');
+    void r.offsetWidth;
+    r.classList.add('fire');
+  });
+  setTimeout(() => {
+    [ring1, ring2, ring3].forEach(r => r.classList.remove('fire'));
+  }, 1200);
+}
+
+function updateDisplay() {
+  const pct = Math.min(100, (elapsed / cfg.total) * 100);
+  progressFill.style.width = pct + '%';
+  elapsedEl.textContent = fmt(elapsed);
+  totalLabelEl.textContent = '/ ' + fmt(cfg.total);
+}
+
+function setConfigUI(active) {
+  document.querySelectorAll('.chip-group, .mode-grid, .custom-panel .custom-fields, .field input').forEach(el => {
+    el.style.pointerEvents = active ? 'none' : '';
+    el.style.opacity = active ? '0.4' : '';
+  });
+  btnStart.style.display = active ? 'none' : 'flex';
+  btnStop.style.display  = active ? 'flex'  : 'none';
+}
+
+/* ─── Pause logic (async inside the tick) ────────────────────── */
+function doPause() {
+  return new Promise(resolve => {
+    pauseChime();
+    pauseOverlay.classList.add('visible');
+    log(`↓ pause — ${cfg.pauseDur}s`, 'pa');
+
+    let remaining = cfg.pauseDur;
+    pauseCountdown.textContent = remaining;
+    const t = setInterval(() => {
+      remaining--;
+      elapsed++;
+      pauseCountdown.textContent = remaining;
+      updateDisplay();
+      if (remaining <= 0) {
+        clearInterval(t);
+        pauseOverlay.classList.remove('visible');
+        resolve();
+      }
+    }, 1000);
+  });
+}
+
+/* ─── Main tick (runs every INTERVAL_SECONDS) ─────────────────── */
+async function tick() {
+  if (!running) return;
+
+  // Check if we should pause
+  if (elapsed >= nextPause && elapsed < cfg.total) {
+    clearInterval(timer);
+    timer = null;
+    await doPause();
+    nextPause += cfg.pauseEvery;
+    if (running && elapsed < cfg.total) {
+      scheduleNext();
+    } else {
+      finish();
+    }
+    return;
+  }
+
+  if (elapsed >= cfg.total) { finish(); return; }
+
+  // Beep
+  const freq = cfg.freq;
+  beep(freq, cfg.beepLen);
+  firePulse();
+
+  const timeStr = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  log(`${timeStr}  beep  ${cfg.beepLen}s  @${freq}Hz`,'hi');
+
+  elapsed += cfg.beepLen + cfg.interval;
+  updateDisplay();
+
+  const secToNextPause = nextPause - elapsed;
+  nextLabelEl.textContent = `next pause in ${Math.max(0,Math.floor(secToNextPause))}s`;
+
+  if (elapsed >= cfg.total) { finish(); return; }
+}
+
+function scheduleNext() {
+  timer = setInterval(tick, (cfg.interval + cfg.beepLen) * 1000);
+}
+
+function finish() {
+  running = false;
+  clearInterval(timer);
+  timer = null;
+  setConfigUI(false);
+  log('✓ session complete');
+  nextLabelEl.textContent = 'done';
+  beep(880, 0.4);
+  setTimeout(() => beep(1100, 0.6), 300);
+}
+
+/* ─── Button handlers ─────────────────────────────────────────── */
+btnStart.addEventListener('click', () => {
+  ensureAudio();
+
+  // Read config
+  const modeKey  = document.querySelector('input[name="mode"]:checked').value;
+  const levelKey = document.querySelector('input[name="level"]:checked').value;
+
+  if (modeKey === '6') {
+    cfg = {
+      total:      parseFloat(document.getElementById('cTotal').value)        || 300,
+      interval:   parseFloat(document.getElementById('cInterval').value)     || 2,
+      pauseEvery: parseFloat(document.getElementById('cPauseInterval').value)|| 60,
+      pauseDur:   parseFloat(document.getElementById('cPauseDur').value)     || 15,
+      beepLen:    parseFloat(document.getElementById('cBeepLen').value)      || 1,
+    };
+  } else {
+    const m = MODES[modeKey];
+    const beepSel = document.querySelector('input[name="beep"]:checked').value;
+    cfg = {
+      total:      m.total,
+      interval:   m.interval,
+      pauseEvery: m.pauseEvery,
+      pauseDur:   m.pauseDur,
+      beepLen:    parseFloat(beepSel),
+    };
+  }
+  cfg.freq = LEVEL_FREQ[levelKey];
+
+  elapsed   = 0;
+  nextPause = cfg.pauseEvery;
+  running   = true;
+
+  updateDisplay();
+  setConfigUI(true);
+  log('▶ session started');
+  nextLabelEl.textContent = '';
+
+  // first beep immediately, then schedule
+  tick();
+  scheduleNext();
+});
+
+btnStop.addEventListener('click', () => {
+  running = false;
+  clearInterval(timer);
+  timer = null;
+  pauseOverlay.classList.remove('visible');
+  setConfigUI(false);
+  log('■ stopped');
+  nextLabelEl.textContent = '';
+});
+
+btnReset.addEventListener('click', () => {
+  if (running) {
+    running = false;
+    clearInterval(timer);
+    timer = null;
+    pauseOverlay.classList.remove('visible');
+    setConfigUI(false);
+  }
+  elapsed = 0;
+  updateDisplay();
+  progressFill.style.width = '0%';
+  elapsedEl.textContent = '0:00';
+  totalLabelEl.textContent = '/ 0:00';
+  nextLabelEl.textContent = '';
+  logBox.innerHTML = '<p class="dim">— waiting to start —</p>';
+});
+
+// init display
+elapsedEl.textContent = '0:00';
+totalLabelEl.textContent = '/ 0:00';
+</script>
+</body>
+</html>
